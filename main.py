@@ -52,13 +52,13 @@ def get_crop_image():
 def ocr_practise():
     # img_base = Image.open("./database/image0.jpg")
     # img_base.show()
-    img = Image.open("./images_for_training/train3.png")
+    img = Image.open("./images_for_training/train10.png")
     img_ar = np.array(img)
     contours,_ = cv2.findContours(img_ar, 3, 2)
     cnt_area = []
-    for i in range(0,30):
+    for i in range(0,len(contours)):
         cnt_area.append(cv2.contourArea(contours[i]))
-    low_threshold = 300
+    low_threshold = 200
     up_threshold = 8000
     print("Without filters:", len(contours))
     contours = [cnt for cnt in contours if cv2.contourArea(cnt) > low_threshold \
@@ -66,39 +66,52 @@ def ocr_practise():
 
     filtered_contours = sort_contours(contours, method="left-to-right")[0]
     print("Number of contours:", len(filtered_contours))
-    stored_coordinates = []
-    cnt = filtered_contours[0]
-    prev_x,_,prev_w,_ = cv2.boundingRect(cnt)
     
     text = ""
-
-    for i in range(1,50,1):
-        cnt = filtered_contours[i]
-        x,y,w,h = cv2.boundingRect(cnt)
-        x_left = prev_x + prev_w
-        x_right = x
-        dis = x_right-x_left
-        if dis > -100:
-            get_text = translate(x,y,w,h,img_ar)
-            if not get_text.isdigit():
-                text += get_text
-            # plt.imshow(let_resized, cmap="gray")
-            # plt.show()
-        else:
-            stored_coordinates.append([x,y,w+prev_w,h])
-        image = cv2.rectangle(img_ar,(x,y),(x+w,y+h),(0,0,0),1)
+    min_contours = min(len(filtered_contours), 50)
+    assembled_contours = []
+    for i in range(2, min_contours-2, 3):
+        past = filtered_contours[i-1]
+        pres = filtered_contours[i]
+        new = filtered_contours[i+1]
+        x,y,w,h = cv2.boundingRect(past)
+        _,_,w1,_ = cv2.boundingRect(pres)
+        _,_,w2,_ = cv2.boundingRect(new)
+        assembled_contours.append([x, y, x+w+w1+w2, y+h])
     
-    write_to_file(text)
-    _ = plt.figure(figsize=(30, 30))
-    plt.imshow(image, cmap="gray")
-    plt.show()
+    if len(assembled_contours) != 0:
+        for item in assembled_contours:
+            x,y,w,h = item
+            get_text = translate(x,y,w,h,img_ar)
+            text += get_text
+            print("New words")
+            image = cv2.rectangle(img_ar,(x,y),(w,h),(0,0,0),1)
+
+        # for i in range(1,assembled_contours,1):
+        #     cnt = assembled_contours[i]
+        #     x,y,w,h = cv2.boundingRect(cnt)
+        #     x_left = prev_x + prev_w
+        #     x_right = x
+        #     dis = x_right-x_left
+        #     # if dis > -100:
+        #     #     get_text = translate(x,y,w,h,img_ar)
+        #     #     if not get_text.isdigit():
+        #     #         text += get_text
+        #         # plt.imshow(let_resized, cmap="gray")
+        #         # plt.show())
+        #     image = cv2.rectangle(img_ar,(x,y),(x+w,y+h),(0,0,0),1)
+        
+        write_to_file(text)
+        _ = plt.figure(figsize=(30, 30))
+        plt.imshow(image, cmap="gray")
+        plt.show()
     pass
 
 def translate(x,y,w,h,img_ar):
-    letters = img_ar[y:y+h, x:x+w]
+    letters = img_ar[y:h, x:w]
     let_img = Image.fromarray(letters)
-    let_resized = let_img.resize((64,64))
-    let_resized.show()
+    let_resized = let_img.resize((1024,256))
+    # let_resized.show()
     conv = let_resized.convert("RGB")
     processor = TrOCRProcessor.from_pretrained('microsoft/trocr-base-handwritten')
     model = VisionEncoderDecoderModel.from_pretrained('microsoft/trocr-base-handwritten')
@@ -120,26 +133,27 @@ def get_from_file():
         for item in phrases:
             print(item[:-2])
 
-# ocr_practise()
-# get_from_file()
+ocr_practise()
+get_from_file()
 
-let_img = Image.open("./test_hand.jpg")
-let_img = Image.open("./small_ph.png")
-width, height = let_img.size
-im_array  = let_img.resize((width*5, height*5))
-conv = np.array(im_array.convert("RGB"))
-sharpening_filter  = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
-im = cv2.filter2D(conv, -1, sharpening_filter)
-# let_resized = let_img.resize((1000,1000))
-let_img = Image.fromarray(im)
+# let_img = Image.open("./test_hand.jpg")
+# let_img = Image.open("./phrase.png")
+# let_img = let_img.resize((800, 300))
+# width, height = let_img.size
+# im_array  = let_img.resize((width*5, height*5))
+# conv = np.array(im_array.convert("RGB"))
+# sharpening_filter  = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+# im = cv2.filter2D(conv, -1, sharpening_filter)
+# # let_resized = let_img.resize((1000,1000))
+# let_img = Image.fromarray(im)
 
 
-processor = TrOCRProcessor.from_pretrained('microsoft/trocr-base-handwritten')
-model = VisionEncoderDecoderModel.from_pretrained('microsoft/trocr-base-handwritten')
-pixel_values = processor(images=let_img, return_tensors="pt").pixel_values
-generated_ids = model.generate(pixel_values)
-generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)
-print(generated_text[0])
+# processor = TrOCRProcessor.from_pretrained('microsoft/trocr-base-handwritten')
+# model = VisionEncoderDecoderModel.from_pretrained('microsoft/trocr-base-handwritten')
+# pixel_values = processor(images=let_img, return_tensors="pt").pixel_values
+# generated_ids = model.generate(pixel_values)
+# generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)
+# print(generated_text[0])
 
 # def sobel():
     # sobelx = cv2.Sobel(img_ar,cv2.CV_64F,1,0,ksize=5)
